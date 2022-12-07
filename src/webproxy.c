@@ -258,7 +258,7 @@ void proxy_run(void)
     int                 i;
     int                 nfds;
     int                 listen_sock;
-    epoll_data          ed;
+    epoll_data          ed = { 0 };
     epoll_data         *edp;
     struct epoll_event  events[MAX_EVENTS];
 
@@ -408,6 +408,9 @@ int handle_epollin_event(epoll_data *edp)
         }
     }
 
+    if (0 == bytes_read) {
+        return 0;
+    }
     /*
      * the fd is proxy-server, forward the buf to client
      */
@@ -436,6 +439,7 @@ int handle_epollin_event(epoll_data *edp)
             goto proxy_request_error;
         }
 
+        errno = 0;
         if (parse_http_request(session, buf, bytes_read) < 0) {
             log_error("parse_http_request");
             goto proxy_request_error;
