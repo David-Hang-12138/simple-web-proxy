@@ -384,7 +384,7 @@ int handle_epollin_event(epoll_data *edp)
 {
     int         ret;
     char        buf[BUF_SIZE];
-    char        method[0x40];
+    char        method[0x40] = { 0 };
     ssize_t     nread;
     ssize_t     bytes_read;
     session_t  *session;
@@ -447,19 +447,21 @@ int handle_epollin_event(epoll_data *edp)
             goto proxy_request_error;
         }
 
-        if ((ret = new_connection(session, sm.epfd)) < 0) {
+        ret = new_connection(session, sm.epfd);
+        log_debug("method = %s conn_ret = %d\n", method, ret);
+        if (ret < 0) {
             log_error("new_connection");
             goto proxy_request_error;
         } else if (ret == 1) {
             /* connection is still in progress */
-            if (strncasecmp(headers[i].name, "connect", 7) != 0) {
+            if (strncasecmp(method, "connect", 7) != 0) {
                 cache_http_request(sm.pool, session, buf, bytes_read);
             }
             sm.put(sm.hc, session);
         } else {
             /* connection is ready */
             sm.put(sm.h, session);
-            if (strncasecmp(headers[i].name, "connect", 7) != 0) {
+            if (strncasecmp(method, "connect", 7) != 0) {
                 ret = sec_send(session, TO_SERVER, buf, bytes_read);
                 if (ret < 0) {
                     log_error("sec_send");
