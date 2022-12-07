@@ -432,14 +432,17 @@ int handle_epollin_event(epoll_data *edp)
 
         session = sm.create(sm.pool, edp->fd);
         if (session == NULL) {
+            log_error("sm.create");
             goto proxy_request_error;
         }
 
         if (parse_http_request(session, buf, bytes_read) < 0) {
+            log_error("parse_http_request");
             goto proxy_request_error;
         }
 
         if ((ret = new_connection(session, sm.epfd)) < 0) {
+            log_error("new_connection");
             goto proxy_request_error;
         } else if (ret == 1) {
             /* connection is still in progress */
@@ -450,6 +453,7 @@ int handle_epollin_event(epoll_data *edp)
             sm.put(sm.h, session);
             ret = sec_send(session, TO_SERVER, buf, bytes_read);
             if (ret < 0) {
+                log_error("sec_send");
                 goto proxy_request_error;
             }
         }
