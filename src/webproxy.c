@@ -139,6 +139,8 @@ static char *not_found_response =
     "  <p>The requested URL was not found on this server.</p>\n"
     " </body>\n" "</html>\n";
 
+static char* connection_established_response = "HTTP/1.0 200 Connection established\r\n\r\n";
+
 static char cached_log_time[LOG_TIME_STR_LEN];
 static proxy_t proxy;
 
@@ -456,6 +458,8 @@ int handle_epollin_event(epoll_data *edp)
             /* connection is still in progress */
             if (strncasecmp(method, "connect", 7) != 0) {
                 cache_http_request(sm.pool, session, buf, bytes_read);
+            } else {
+                ret = write(edp->fd, connection_established_response, strlen(connection_established_response));
             }
             sm.put(sm.hc, session);
         } else {
@@ -467,6 +471,8 @@ int handle_epollin_event(epoll_data *edp)
                     log_error("sec_send");
                     goto proxy_request_error;
                 }
+            } else {
+                ret = write(edp->fd, connection_established_response, strlen(connection_established_response));
             }
         }
     }
