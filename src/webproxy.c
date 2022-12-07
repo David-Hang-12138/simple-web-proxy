@@ -701,6 +701,7 @@ static int new_connection(session_t *session, int epfd)
     }
 
     set_sockaddr(&srv_addr, ip, port);
+    errno = 0;
     connect_flag = connect(sockfd, (struct sockaddr *)&srv_addr, sizeof(srv_addr));
     if (connect_flag < 0 && errno != EINPROGRESS) {
         log_error("connect()");
