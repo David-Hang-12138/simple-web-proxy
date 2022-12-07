@@ -106,7 +106,7 @@ int handle_accept_event(int);
 int handle_epollhup_event(int);
 int handle_epollin_event(epoll_data *);
 int handle_epollout_event(epoll_data *);
-int parse_http_request(session_t *, char *, size_t);
+int parse_http_request(session_t *, char *, size_t, char* method_buf, size_t method_buf_len);
 int cache_http_request(mpool *, session_t *, char *, ssize_t);
 int sec_send(session_t *, int, char *, size_t);
 int put_session(hash_t *, session_t *);
@@ -384,6 +384,7 @@ int handle_epollin_event(epoll_data *edp)
 {
     int         ret;
     char        buf[BUF_SIZE];
+    char        method[0x40];
     ssize_t     nread;
     ssize_t     bytes_read;
     session_t  *session;
@@ -440,7 +441,8 @@ int handle_epollin_event(epoll_data *edp)
         }
 
         errno = 0;
-        if (parse_http_request(session, buf, bytes_read) < 0) {
+        
+        if (parse_http_request(session, buf, bytes_read, method, sizeof(method)) < 0) {
             log_error("parse_http_request");
             goto proxy_request_error;
         }
@@ -450,15 +452,19 @@ int handle_epollin_event(epoll_data *edp)
             goto proxy_request_error;
         } else if (ret == 1) {
             /* connection is still in progress */
-            cache_http_request(sm.pool, session, buf, bytes_read);
+            if (strncasecmp(headers[i].name, "connect", 7) != 0) {
+                cache_http_request(sm.pool, session, buf, bytes_read);
+            }
             sm.put(sm.hc, session);
         } else {
             /* connection is ready */
             sm.put(sm.h, session);
-            ret = sec_send(session, TO_SERVER, buf, bytes_read);
-            if (ret < 0) {
-                log_error("sec_send");
-                goto proxy_request_error;
+            if (strncasecmp(headers[i].name, "connect", 7) != 0) {
+                ret = sec_send(session, TO_SERVER, buf, bytes_read);
+                if (ret < 0) {
+                    log_error("sec_send");
+                    goto proxy_request_error;
+                }
             }
         }
     }
@@ -503,8 +509,11 @@ int handle_epollout_event(epoll_data *edp)
     return 0;
 }
 
+#ifndef min
+#define min(x, y) ((x) < (y) ? (x) : (y))
+#endif
 
-int parse_http_request(session_t *session, char *buf, size_t buflen)
+int parse_http_request(session_t *session, char *buf, size_t buflen, char* method_buf, size_t method_buf_len)
 {
     int                 pret, minor_version;
     size_t              prevbuflen = 0, method_len, path_len, num_headers, i;
@@ -518,6 +527,7 @@ int parse_http_request(session_t *session, char *buf, size_t buflen)
         log_debug("parse request fail: %d\n", pret);
         return pret;
     }
+    memcpy(method_buf, method, min(method_len, method_buf_len));
     for (i = 0; i != num_headers; ++i) {
         if (strncasecmp(headers[i].name, "host", 4) == 0) {
             strncpy(session->host, headers[i].value,
